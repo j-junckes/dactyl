@@ -15,21 +15,30 @@ jobs:
         include:
           - runner: ubuntu-24.04
             arch: x86_64
+            qt_arch: linux_gcc_64
           - runner: ubuntu-24.04-arm
             arch: aarch64
+            qt_arch: linux_arm64
 
     runs-on: ${{ matrix.runner }}
 
     steps:
       - uses: actions/checkout@v4
 
-      - name: Install dependencies
+      - name: Install build tools
         run: |
           sudo apt-get update
           sudo apt-get install -y \
             cmake ninja-build \
-            qt6-base-dev qt6-declarative-dev \
             libgl1-mesa-dev libfuse2
+
+      - name: Install Qt 6.8
+        uses: jurplel/install-qt-action@v4
+        with:
+          version: '6.8.*'
+          arch: ${{ matrix.qt_arch }}
+          modules: 'qtdeclarative'
+          cache: true
 
       - name: Build
         run: |
@@ -43,6 +52,7 @@ jobs:
         env:
           OUTPUT: Dactyl-${{ github.ref_name }}-linux-${{ matrix.arch }}.AppImage
           QML_SOURCES_PATHS: ${{ github.workspace }}
+          QMAKE: ${{ env.QT_ROOT_DIR }}/bin/qmake
         run: |
           wget -q "https://github.com/linuxdeploy/linuxdeploy/releases/download/continuous/linuxdeploy-${{ matrix.arch }}.AppImage"
           wget -q "https://github.com/linuxdeploy/linuxdeploy-plugin-qt/releases/download/continuous/linuxdeploy-plugin-qt-${{ matrix.arch }}.AppImage"
