@@ -1,0 +1,71 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    strategy:
+      matrix:
+        include:
+          - runner: ubuntu-24.04
+            arch: x86_64
+          - runner: ubuntu-24.04-arm
+            arch: aarch64
+
+    runs-on: ${{ matrix.runner }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            cmake ninja-build \
+            qt6-base-dev qt6-declarative-dev \
+            libgl1-mesa-dev libfuse2
+
+      - name: Build
+        run: |
+          cmake -B build -G Ninja \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DCMAKE_INSTALL_PREFIX=/usr
+          cmake --build build --parallel
+          DESTDIR=$PWD/AppDir cmake --install build
+
+      - name: Create AppImage
+        env:
+          OUTPUT: Dactyl-${{ github.ref_name }}-linux-${{ matrix.arch }}.AppImage
+          QML_SOURCES_PATHS: ${{ github.workspace }}
+        run: |
+          wget -q "https://github.com/linuxdeploy/linuxdeploy/releases/download/continuous/linuxdeploy-${{ matrix.arch }}.AppImage"
+          wget -q "https://github.com/linuxdeploy/linuxdeploy-plugin-qt/releases/download/continuous/linuxdeploy-plugin-qt-${{ matrix.arch }}.AppImage"
+          chmod +x linuxdeploy-*.AppImage
+
+          cat > dactyl.desktop << 'EOF'
+          [Desktop Entry]
+          Name=Dactyl
+          Exec=appDactyl
+          Icon=dactyl
+          Type=Application
+          Categories=Utility;
+          EOF
+
+          ./linuxdeploy-${{ matrix.arch }}.AppImage \
+            --appdir AppDir \
+            --desktop-file dactyl.desktop \
+            --icon-file assets/icon.png \
+            --plugin qt \
+            --output appimage
+
+      - name: Publish release
+        uses: softprops/action-gh-release@v2
+        with:
+          generate_release_notes: true
+          files: "*.AppImage"
